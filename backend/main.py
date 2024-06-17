@@ -1,101 +1,92 @@
-from contextlib import asynccontextmanager
-from bs4 import BeautifulSoup
-import json
-import markdown
-import time
-import os
-import sys
-import logging
-import aiohttp
-import requests
-import mimetypes
-import shutil
-import os
 import inspect
-import asyncio
-
-from fastapi import FastAPI, Request, Depends, status, UploadFile, File, Form
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse
-from fastapi import HTTPException
-from fastapi.middleware.wsgi import WSGIMiddleware
-from fastapi.middleware.cors import CORSMiddleware
-from starlette.exceptions import HTTPException as StarletteHTTPException
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import StreamingResponse, Response
-
-
-from apps.socket.main import app as socket_app
-from apps.ollama.main import (
-    app as ollama_app,
-    OpenAIChatCompletionForm,
-    get_all_models as get_ollama_models,
-    generate_openai_chat_completion as generate_ollama_chat_completion,
-)
-from apps.openai.main import (
-    app as openai_app,
-    get_all_models as get_openai_models,
-    generate_chat_completion as generate_openai_chat_completion,
-)
-
-from apps.audio.main import app as audio_app
-from apps.images.main import app as images_app
-from apps.rag.main import app as rag_app
-from apps.webui.main import app as webui_app
-
-
-from pydantic import BaseModel
+import json
+import logging
+import mimetypes
+import os
+import shutil
+import sys
+import time
+from contextlib import asynccontextmanager
 from typing import List, Optional
 
-from apps.webui.models.models import Models, ModelModel
+import aiohttp
+import requests
+from apps.audio.main import app as audio_app
+from apps.images.main import app as images_app
+from apps.ollama.main import OpenAIChatCompletionForm
+from apps.ollama.main import app as ollama_app
+from apps.ollama.main import (
+    generate_openai_chat_completion as generate_ollama_chat_completion,
+)
+from apps.ollama.main import get_all_models as get_ollama_models
+from apps.openai.main import app as openai_app
+from apps.openai.main import generate_chat_completion as generate_openai_chat_completion
+from apps.openai.main import get_all_models as get_openai_models
+from apps.rag.main import app as rag_app
+from apps.rag.utils import get_rag_context, rag_template
+from apps.socket.main import app as socket_app
+from apps.webui.main import app as webui_app
+from apps.webui.models.models import Models
 from apps.webui.models.tools import Tools
 from apps.webui.utils import load_toolkit_module_by_id
-
-
-from utils.utils import (
-    get_admin_user,
-    get_verified_user,
-    get_current_user,
-    get_http_authorization_cred,
-)
-from utils.task import (
-    title_generation_template,
-    search_query_generation_template,
-    tools_function_calling_generation_template,
-)
-from utils.misc import get_last_user_message, add_or_update_system_message
-
-from apps.rag.utils import get_rag_context, rag_template
-
 from config import (
-    CONFIG_DATA,
-    WEBUI_NAME,
-    WEBUI_URL,
-    WEBUI_AUTH,
-    ENV,
-    VERSION,
-    CHANGELOG,
-    FRONTEND_BUILD_DIR,
     CACHE_DIR,
-    STATIC_DIR,
-    ENABLE_OPENAI_API,
-    ENABLE_OLLAMA_API,
-    ENABLE_MODEL_FILTER,
-    MODEL_FILTER_LIST,
-    GLOBAL_LOG_LEVEL,
-    SRC_LOG_LEVELS,
-    WEBHOOK_URL,
+    CHANGELOG,
+    CONFIG_DATA,
     ENABLE_ADMIN_EXPORT,
-    WEBUI_BUILD_HASH,
+    ENABLE_MODEL_FILTER,
+    ENABLE_OLLAMA_API,
+    ENABLE_OPENAI_API,
+    ENV,
+    FRONTEND_BUILD_DIR,
+    GLOBAL_LOG_LEVEL,
+    MODEL_FILTER_LIST,
+    SEARCH_QUERY_GENERATION_PROMPT_TEMPLATE,
+    SEARCH_QUERY_PROMPT_LENGTH_THRESHOLD,
+    SRC_LOG_LEVELS,
+    STATIC_DIR,
     TASK_MODEL,
     TASK_MODEL_EXTERNAL,
     TITLE_GENERATION_PROMPT_TEMPLATE,
-    SEARCH_QUERY_GENERATION_PROMPT_TEMPLATE,
-    SEARCH_QUERY_PROMPT_LENGTH_THRESHOLD,
     TOOLS_FUNCTION_CALLING_PROMPT_TEMPLATE,
+    VERSION,
+    WEBHOOK_URL,
+    WEBUI_AUTH,
+    WEBUI_BUILD_HASH,
+    WEBUI_NAME,
+    WEBUI_URL,
     AppConfig,
 )
 from constants import ERROR_MESSAGES
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+    status,
+)
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response, StreamingResponse
+from utils.misc import add_or_update_system_message, get_last_user_message
+from utils.task import (
+    search_query_generation_template,
+    title_generation_template,
+    tools_function_calling_generation_template,
+)
+from utils.utils import (
+    get_admin_user,
+    get_current_user,
+    get_http_authorization_cred,
+    get_verified_user,
+)
 
 logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
 log = logging.getLogger(__name__)
@@ -1148,7 +1139,6 @@ class AddPipelineForm(BaseModel):
 
 @app.post("/api/pipelines/add")
 async def add_pipeline(form_data: AddPipelineForm, user=Depends(get_admin_user)):
-
     r = None
     try:
         urlIdx = form_data.urlIdx
@@ -1191,7 +1181,6 @@ class DeletePipelineForm(BaseModel):
 
 @app.delete("/api/pipelines/delete")
 async def delete_pipeline(form_data: DeletePipelineForm, user=Depends(get_admin_user)):
-
     r = None
     try:
         urlIdx = form_data.urlIdx
@@ -1266,10 +1255,9 @@ async def get_pipelines(urlIdx: Optional[int] = None, user=Depends(get_admin_use
 async def get_pipeline_valves(
     urlIdx: Optional[int], pipeline_id: str, user=Depends(get_admin_user)
 ):
-    models = await get_all_models()
+    models = await get_all_models()  # noqa: F841  # TODO: is this required? `models` is not used.
     r = None
     try:
-
         url = openai_app.state.config.OPENAI_API_BASE_URLS[urlIdx]
         key = openai_app.state.config.OPENAI_API_KEYS[urlIdx]
 
@@ -1304,7 +1292,7 @@ async def get_pipeline_valves(
 async def get_pipeline_valves_spec(
     urlIdx: Optional[int], pipeline_id: str, user=Depends(get_admin_user)
 ):
-    models = await get_all_models()
+    models = await get_all_models()  # noqa: F841  # TODO: is this required? `models` is not used.
 
     r = None
     try:
@@ -1344,7 +1332,7 @@ async def update_pipeline_valves(
     form_data: dict,
     user=Depends(get_admin_user),
 ):
-    models = await get_all_models()
+    models = await get_all_models()  # noqa: F841  # TODO: is this required? `models` is not used.
 
     r = None
     try:
@@ -1464,7 +1452,7 @@ async def update_webhook_url(form_data: UrlForm, user=Depends(get_admin_user)):
 
 
 @app.get("/api/version")
-async def get_app_config():
+async def get_app_version():
     return {
         "version": VERSION,
     }
@@ -1487,7 +1475,7 @@ async def get_app_latest_release_version():
                 latest_version = data["tag_name"]
 
                 return {"current": VERSION, "latest": latest_version[1:]}
-    except aiohttp.ClientError as e:
+    except aiohttp.ClientError:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=ERROR_MESSAGES.RATE_LIMIT_EXCEEDED,

@@ -1,58 +1,44 @@
-from fastapi import (
-    FastAPI,
-    Request,
-    Response,
-    HTTPException,
-    Depends,
-    status,
-    UploadFile,
-    File,
-    BackgroundTasks,
-)
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
-from fastapi.concurrency import run_in_threadpool
-
-from pydantic import BaseModel, ConfigDict
-
-import os
-import re
-import copy
-import random
-import requests
-import json
-import uuid
-import aiohttp
 import asyncio
+import json
 import logging
+import os
+import random
+import re
 import time
+from typing import List, Optional, Union
 from urllib.parse import urlparse
-from typing import Optional, List, Union
 
-from starlette.background import BackgroundTask
-
+import aiohttp
+import requests
 from apps.webui.models.models import Models
-from apps.webui.models.users import Users
-from constants import ERROR_MESSAGES
-from utils.utils import (
-    decode_token,
-    get_current_user,
-    get_verified_user,
-    get_admin_user,
-)
-
-
 from config import (
-    SRC_LOG_LEVELS,
-    OLLAMA_BASE_URLS,
-    ENABLE_OLLAMA_API,
     AIOHTTP_CLIENT_TIMEOUT,
     ENABLE_MODEL_FILTER,
+    ENABLE_OLLAMA_API,
     MODEL_FILTER_LIST,
+    OLLAMA_BASE_URLS,
+    SRC_LOG_LEVELS,
     UPLOAD_DIR,
     AppConfig,
 )
+from constants import ERROR_MESSAGES
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    HTTPException,
+    Request,
+    UploadFile,
+)
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, ConfigDict
+from starlette.background import BackgroundTask
 from utils.misc import calculate_sha256
+from utils.utils import (
+    get_admin_user,
+    get_verified_user,
+)
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["OLLAMA"])
@@ -274,7 +260,6 @@ async def get_ollama_tags(
 async def get_ollama_versions(url_idx: Optional[int] = None):
     if app.state.config.ENABLE_OLLAMA_API:
         if url_idx == None:
-
             # returns lowest version
             tasks = [
                 fetch_url(f"{url}/api/version")
@@ -336,8 +321,6 @@ async def pull_model(
 ):
     url = app.state.config.OLLAMA_BASE_URLS[url_idx]
     log.info(f"url: {url}")
-
-    r = None
 
     # Admin should be able to pull models from any source
     payload = {**form_data.model_dump(exclude_none=True), "insecure": True}
@@ -594,7 +577,6 @@ def generate_ollama_embeddings(
     form_data: GenerateEmbeddingsForm,
     url_idx: Optional[int] = None,
 ):
-
     log.info(f"generate_ollama_embeddings {form_data}")
 
     if url_idx == None:
@@ -665,7 +647,6 @@ async def generate_completion(
     url_idx: Optional[int] = None,
     user=Depends(get_verified_user),
 ):
-
     if url_idx == None:
         model = form_data.model
 
@@ -711,7 +692,6 @@ async def generate_chat_completion(
     url_idx: Optional[int] = None,
     user=Depends(get_verified_user),
 ):
-
     log.debug(
         "form_data.model_dump_json(exclude_none=True).encode(): {0} ".format(
             form_data.model_dump_json(exclude_none=True).encode()
@@ -743,7 +723,6 @@ async def generate_chat_completion(
                 )
 
             if model_info.params.get("mirostat_tau", None):
-
                 payload["options"]["mirostat_tau"] = model_info.params.get(
                     "mirostat_tau", None
                 )
@@ -879,7 +858,6 @@ async def generate_openai_chat_completion(
     url_idx: Optional[int] = None,
     user=Depends(get_verified_user),
 ):
-
     payload = {
         **form_data.model_dump(exclude_none=True),
     }
@@ -1034,7 +1012,6 @@ def parse_huggingface_url(hf_url):
         path_components = parsed_url.path.split("/")
 
         # Extract the desired output
-        user_repo = "/".join(path_components[1:3])
         model_file = path_components[-1]
 
         return model_file
@@ -1099,7 +1076,6 @@ async def download_model(
     url_idx: Optional[int] = None,
     user=Depends(get_admin_user),
 ):
-
     allowed_hosts = ["https://huggingface.co/", "https://github.com/"]
 
     if not any(form_data.url.startswith(host) for host in allowed_hosts):
